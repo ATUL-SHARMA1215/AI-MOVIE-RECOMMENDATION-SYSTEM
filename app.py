@@ -45,17 +45,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 @st.cache_data(show_spinner=False)
+@st.cache_data
 def load_data():
-    ratings = pd.read_csv('ml-100k/u.data', sep='\t',
-                          names=['user_id', 'movie_id', 'rating', 'timestamp'])
-    movies = pd.read_csv('ml-100k/u.item', sep='|',
-                         names=['movie_id', 'title', 'release_date', 'video_release_date', 'ignore_IMDb_URL',
-                                'unknown', 'Action', 'Adventure', 'Animation', "Children's", 'Comedy', 'Crime',
-                                'Documentary', 'Drama', 'Fantasy', 'Film-Noir', 'Horror', 'Musical', 'Mystery',
-                                'Romance', 'Sci-Fi', 'Thriller', 'War', 'Western'],
-                         encoding='latin-1',
-                         usecols=[i for i in range(24) if i != 4])
-    movies['year'] = pd.to_datetime(movies['release_date'], errors='coerce').dt.year.fillna(0).astype(int)
+    ratings = pd.read_csv("u_data.csv")  # or "data/u_data.csv" if in a folder
+    movies = pd.read_csv("movies.csv")   # add this file if needed
     return ratings, movies
 
 ratings, movies = load_data()
