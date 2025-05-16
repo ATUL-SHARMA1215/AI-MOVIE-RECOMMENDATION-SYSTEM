@@ -5,6 +5,19 @@ from sklearn.metrics.pairwise import cosine_similarity
 import io
 import json
 import datetime
+import os
+import streamlit as st
+import os
+
+BASE_DIR = os.getcwd()  # Or hardcode the path to your project root if needed
+
+ratings_path = os.path.join(BASE_DIR, "data", "u_data.csv")
+movies_path = os.path.join(BASE_DIR, "data", "movies.csv")
+
+ratings = pd.read_csv(ratings_path)
+movies = pd.read_csv(movies_path)
+
+st.write("Current Working Directory:", os.getcwd())
 
 # Initialize session state variables
 if "usage_log" not in st.session_state:
