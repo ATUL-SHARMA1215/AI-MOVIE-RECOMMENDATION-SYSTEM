@@ -8,6 +8,10 @@ import datetime
 import os
 import streamlit as st
 import os
+import os
+
+st.write("Files in current directory:", os.listdir())
+st.write("Files in data folder:", os.listdir("data"))
 
 BASE_DIR = os.getcwd()  # Or hardcode the path to your project root if needed
 
