@@ -44,7 +44,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-@st.cache_data(show_spinner=False)
+@st.cache_data
 def load_data():
     ratings = pd.read_csv("data/u_data.csv")
     movies = pd.read_csv("data/movies.csv")
