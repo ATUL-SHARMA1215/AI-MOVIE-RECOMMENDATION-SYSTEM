@@ -5,54 +5,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 import io
 import json
 import datetime
-import os
-import streamlit as st
-import os
-import os
-import os
-import streamlit as st
-
-BASE_DIR = os.getcwd()
-ratings_path = os.path.join(BASE_DIR, "data", "u_data.csv")
-movies_path = os.path.join(BASE_DIR, "data", "movies.csv")
-
-try:
-    ratings = pd.read_csv(ratings_path)
-    st.write("Ratings loaded successfully! Rows:", len(ratings))
-except Exception as e:
-    st.write("Error loading ratings:", e)
-
-try:
-    movies = pd.read_csv(movies_path)
-    st.write("Movies loaded successfully! Rows:", len(movies))
-except Exception as e:
-    st.write("Error loading movies:", e)
-st.write("Current working directory:", os.getcwd())
-
-try:
-    files_in_root = os.listdir()
-    st.write("Files and folders here:", files_in_root)
-except Exception as e:
-    st.write("Error listing root dir:", e)
-
-try:
-    files_in_data = os.listdir("data")
-    st.write("Files in 'data/' folder:", files_in_data)
-except Exception as e:
-    st.write("Error accessing 'data/' folder:", e)
-
-st.write("Files in current directory:", os.listdir())
-st.write("Files in data folder:", os.listdir("data"))
-
-BASE_DIR = os.getcwd()  # Or hardcode the path to your project root if needed
-
-ratings_path = os.path.join(BASE_DIR, "data", "u_data.csv")
-movies_path = os.path.join(BASE_DIR, "data", "movies.csv")
-
-ratings = pd.read_csv(ratings_path)
-movies = pd.read_csv(movies_path)
-
-st.write("Current Working Directory:", os.getcwd())
 
 # Initialize session state variables
 if "usage_log" not in st.session_state:
@@ -92,12 +44,19 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_data():
-    ratings = pd.read_csv("data/u_data.csv")
-    movies = pd.read_csv("data/movies.csv")
+    ratings = pd.read_csv('ml-100k/u.data', sep='\t',
+                          names=['user_id', 'movie_id', 'rating', 'timestamp'])
+    movies = pd.read_csv('ml-100k/u.item', sep='|',
+                         names=['movie_id', 'title', 'release_date', 'video_release_date', 'ignore_IMDb_URL',
+                                'unknown', 'Action', 'Adventure', 'Animation', "Children's", 'Comedy', 'Crime',
+                                'Documentary', 'Drama', 'Fantasy', 'Film-Noir', 'Horror', 'Musical', 'Mystery',
+                                'Romance', 'Sci-Fi', 'Thriller', 'War', 'Western'],
+                         encoding='latin-1',
+                         usecols=[i for i in range(24) if i != 4])
+    movies['year'] = pd.to_datetime(movies['release_date'], errors='coerce').dt.year.fillna(0).astype(int)
     return ratings, movies
-
 
 ratings, movies = load_data()
 
