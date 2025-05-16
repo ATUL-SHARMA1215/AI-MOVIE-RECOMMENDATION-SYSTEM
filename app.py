@@ -46,6 +46,8 @@ st.markdown("""
 
 @st.cache_data(show_spinner=False)
 @st.cache_data
+ratings = pd.read_csv("data/u_data.csv")
+
 def load_data():
     ratings = pd.read_csv("u_data.csv")  # or "data/u_data.csv" if in a folder
     movies = pd.read_csv("movies.csv")   # add this file if needed
