@@ -9,6 +9,37 @@ import os
 import streamlit as st
 import os
 import os
+import os
+import streamlit as st
+
+BASE_DIR = os.getcwd()
+ratings_path = os.path.join(BASE_DIR, "data", "u_data.csv")
+movies_path = os.path.join(BASE_DIR, "data", "movies.csv")
+
+try:
+    ratings = pd.read_csv(ratings_path)
+    st.write("Ratings loaded successfully! Rows:", len(ratings))
+except Exception as e:
+    st.write("Error loading ratings:", e)
+
+try:
+    movies = pd.read_csv(movies_path)
+    st.write("Movies loaded successfully! Rows:", len(movies))
+except Exception as e:
+    st.write("Error loading movies:", e)
+st.write("Current working directory:", os.getcwd())
+
+try:
+    files_in_root = os.listdir()
+    st.write("Files and folders here:", files_in_root)
+except Exception as e:
+    st.write("Error listing root dir:", e)
+
+try:
+    files_in_data = os.listdir("data")
+    st.write("Files in 'data/' folder:", files_in_data)
+except Exception as e:
+    st.write("Error accessing 'data/' folder:", e)
 
 st.write("Files in current directory:", os.listdir())
 st.write("Files in data folder:", os.listdir("data"))
