@@ -8,7 +8,40 @@ import datetime
 import os
 import zipfile
 import urllib.request
+import os
+import zipfile
+import urllib.request
 
+@st.cache_data(show_spinner=False)
+def load_data():
+    dataset_url = "http://files.grouplens.org/datasets/movielens/ml-100k.zip"
+    zip_path = "ml-100k.zip"
+    extract_path = "ml-100k"
+
+    # Download if not already downloaded
+    if not os.path.exists(extract_path):
+        urllib.request.urlretrieve(dataset_url, zip_path)
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall()
+        os.remove(zip_path)
+
+    # Read the files AFTER confirming they exist
+    ratings_path = os.path.join(extract_path, "u.data")
+    movies_path = os.path.join(extract_path, "u.item")
+
+    if not os.path.exists(ratings_path) or not os.path.exists(movies_path):
+        raise FileNotFoundError("Dataset files not found after extraction.")
+
+    ratings = pd.read_csv(ratings_path, sep="\t", names=["user_id", "movie_id", "rating", "timestamp"])
+    movies = pd.read_csv(movies_path, sep="|",
+                         names=['movie_id', 'title', 'release_date', 'video_release_date', 'ignore_IMDb_URL',
+                                'unknown', 'Action', 'Adventure', 'Animation', "Children's", 'Comedy', 'Crime',
+                                'Documentary', 'Drama', 'Fantasy', 'Film-Noir', 'Horror', 'Musical', 'Mystery',
+                                'Romance', 'Sci-Fi', 'Thriller', 'War', 'Western'],
+                         encoding='latin-1',
+                         usecols=[i for i in range(24) if i != 4])
+    movies['year'] = pd.to_datetime(movies['release_date'], errors='coerce').dt.year.fillna(0).astype(int)
+    return ratings, movies
 # Initialize session state variables
 if "usage_log" not in st.session_state:
     st.session_state["usage_log"] = []
