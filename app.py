@@ -44,16 +44,23 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Load Data
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_data():
-    ratings = pd.read_csv("data/u_data.csv")      # Ensure this file exists
-    movies = pd.read_csv("data/movies.csv")       # Ensure this file exists
+    ratings = pd.read_csv('ml-100k/u.data', sep='\t',
+                          names=['user_id', 'movie_id', 'rating', 'timestamp'])
+    movies = pd.read_csv('ml-100k/u.item', sep='|',
+                         names=['movie_id', 'title', 'release_date', 'video_release_date', 'ignore_IMDb_URL',
+                                'unknown', 'Action', 'Adventure', 'Animation', "Children's", 'Comedy', 'Crime',
+                                'Documentary', 'Drama', 'Fantasy', 'Film-Noir', 'Horror', 'Musical', 'Mystery',
+                                'Romance', 'Sci-Fi', 'Thriller', 'War', 'Western'],
+                         encoding='latin-1',
+                         usecols=[i for i in range(24) if i != 4])
+    movies['year'] = pd.to_datetime(movies['release_date'], errors='coerce').dt.year.fillna(0).astype(int)
     return ratings, movies
 
 ratings, movies = load_data()
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def prepare_matrices(ratings, movies):
     user_movie_matrix = ratings.pivot_table(index='user_id', columns='movie_id', values='rating').fillna(0)
     genre_features = movies.drop(columns=['movie_id', 'title', 'release_date', 'video_release_date', 'year'])
@@ -87,12 +94,14 @@ def recommend_movies_user_based(user_id, top_n=10):
 def hybrid_recommendation(user_id, liked_movies, top_n=10, weight_content=0.5, weight_collab=0.5):
     if user_id not in user_movie_matrix.index or not liked_movies:
         return []
+    # Content-based score aggregation
     content_scores = pd.Series(0, index=genre_sim_df.columns)
     for movie in liked_movies:
         if movie in genre_sim_df:
             content_scores += genre_sim_df[movie]
     content_scores = content_scores.drop(labels=liked_movies, errors='ignore')
 
+    # Collaborative filtering score aggregation
     similar_users = user_sim_df[user_id].sort_values(ascending=False).drop(user_id)
     weighted_ratings = pd.Series(0, index=user_movie_matrix.columns, dtype=float)
     for sim_user, sim_score in similar_users.items():
@@ -108,13 +117,16 @@ def hybrid_recommendation(user_id, liked_movies, top_n=10, weight_content=0.5, w
         if len(title) > 0:
             collab_scores[title[0]] = score
 
+    # Normalize scores
     if content_scores.max() > 0:
         content_scores /= content_scores.max()
     if collab_scores.max() > 0:
         collab_scores /= collab_scores.max()
 
+    # Combine weighted scores
     final_scores = content_scores * weight_content + collab_scores * weight_collab
-    return final_scores.sort_values(ascending=False).head(top_n).index.tolist()
+    final_scores = final_scores.sort_values(ascending=False)
+    return final_scores.head(top_n).index.tolist()
 
 def show_movie_card_simple(title, key_prefix=""):
     movie_row = movies[movies['title'] == title].iloc[0]
@@ -137,6 +149,7 @@ def show_movie_card_simple(title, key_prefix=""):
         """, unsafe_allow_html=True
     )
 
+    # Unique key includes prefix + movie_id
     if st.button(fav_button_label, key=f"{key_prefix}_fav_{movie_id}"):
         if is_fav:
             st.session_state["favorites"].remove(title)
@@ -147,7 +160,10 @@ def show_movie_card_simple(title, key_prefix=""):
         st.rerun()
 
 def to_csv(data_list):
-    return "\n".join(data_list)
+    buffer = io.StringIO()
+    for item in data_list:
+        buffer.write(item + "\n")
+    return buffer.getvalue()
 
 def to_json(data_list):
     return json.dumps(data_list, indent=2)
@@ -170,7 +186,7 @@ def log_usage(method, user_id=None, liked_movies=None, recommendations=None):
     }
     st.session_state["usage_log"].append(log_entry)
 
-# Sidebar
+# Sidebar User Profile & Filters
 with st.sidebar.expander("👤 User Profile & Filters", expanded=True):
     if "username" not in st.session_state:
         username = st.text_input("Enter your username:", placeholder="Your name or nickname")
@@ -185,7 +201,10 @@ with st.sidebar.expander("👤 User Profile & Filters", expanded=True):
               'Documentary', 'Drama', 'Fantasy', 'Film-Noir', 'Horror', 'Musical', 'Mystery',
               'Romance', 'Sci-Fi', 'Thriller', 'War', 'Western']
 
-    genre_weights = {genre: st.slider(f"{genre}", 0.0, 1.0, 0.0, step=0.05, key=f"weight_{genre}") for genre in genres}
+    genre_weights = {}
+    for genre in genres:
+        weight = st.slider(f"{genre}", 0.0, 1.0, 0.0, step=0.05, key=f"weight_{genre}")
+        genre_weights[genre] = weight
 
     filtered_movies = movies.copy()
     genre_weight_series = pd.Series(genre_weights)
@@ -197,7 +216,8 @@ with st.sidebar.expander("👤 User Profile & Filters", expanded=True):
 
 # Main Interface
 st.markdown("## 🔍 Choose Recommendation Mode")
-recommendations = []
+
+recommendations = []  # Initialize recommendations variable
 
 mode = st.selectbox("Select Recommendation Type", ["Content-Based", "Collaborative-Based", "Hybrid"], index=0)
 
@@ -217,45 +237,84 @@ elif mode == "Collaborative-Based":
 elif mode == "Hybrid":
     user_ids = sorted(user_movie_matrix.index)
     selected_user = st.selectbox("Select your User ID", user_ids, key="hybrid_user")
-    liked_movies = st.multiselect("Select movies you liked", sorted(filtered_movies['title'].unique()))
+    liked_movies = st.multiselect(
+        "Select movies you liked (for content-based part)",
+        options=sorted(filtered_movies['title'].unique())
+    )
     weight_content = st.slider("Content-Based Weight", 0.0, 1.0, 0.5, step=0.05)
     weight_collab = 1.0 - weight_content
     if selected_user and liked_movies:
         recommendations = hybrid_recommendation(selected_user, liked_movies, top_n=10,
-                                                weight_content=weight_content, weight_collab=weight_collab)
+                                               weight_content=weight_content,
+                                               weight_collab=weight_collab)
         log_usage("Hybrid", user_id=selected_user, liked_movies=liked_movies, recommendations=recommendations)
 
-# Show Recommendations
 if recommendations:
     st.subheader("Recommended Movies:")
     for i, title in enumerate(recommendations, 1):
         show_movie_card_simple(title, key_prefix=f"rec_{i}")
 
+    # Favorite movies download
+    st.markdown("---")
     st.markdown("### 📥 Download Recommendations")
     col1, col2, col3 = st.columns(3)
-    with col1:
-        st.download_button("Download CSV", to_csv(recommendations), file_name="recommendations.csv", mime="text/csv")
-    with col2:
-        st.download_button("Download JSON", to_json(recommendations), file_name="recommendations.json", mime="application/json")
-    with col3:
-        st.download_button("Download Excel", to_excel(recommendations), file_name="recommendations.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-# Favorites
+    with col1:
+        csv_data = to_csv(recommendations)
+        st.download_button("Download CSV", csv_data, file_name="recommendations.csv", mime="text/csv")
+
+    with col2:
+        json_data = to_json(recommendations)
+        st.download_button("Download JSON", json_data, file_name="recommendations.json", mime="application/json")
+
+    with col3:
+        excel_data = to_excel(recommendations)
+        st.download_button("Download Excel", data=excel_data, file_name="recommendations.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+# Show favorites if any
+if st.session_state["favorites"]:
+    st.markdown("---")
+    st.subheader("💖 Your Favorites")
+    for fav_title in sorted(st.session_state["favorites"]):
+        show_movie_card_simple(fav_title, key_prefix="fav")
+
+# Optional: Show usage logs for debugging or user info (can be hidden)
+with st.expander("📝 Usage Logs"):
+    st.json(st.session_state["usage_log"])
 if st.session_state["favorites"]:
     st.markdown("---")
     st.subheader("💖 Your Favorites")
     for i, fav_title in enumerate(sorted(st.session_state["favorites"]), start=1):
         show_movie_card_simple(fav_title, key_prefix=f"fav_{i}")
 
+
     st.markdown("### 📥 Download Your Favorites")
     col1, col2, col3 = st.columns(3)
-    with col1:
-        st.download_button("Download Favorites CSV", to_csv(sorted(st.session_state["favorites"])), file_name="favorites.csv", mime="text/csv")
-    with col2:
-        st.download_button("Download Favorites JSON", to_json(sorted(st.session_state["favorites"])), file_name="favorites.json", mime="application/json")
-    with col3:
-        st.download_button("Download Favorites Excel", to_excel(sorted(st.session_state["favorites"])), file_name="favorites.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-# Logs
-with st.expander("📝 Usage Logs"):
-    st.json(st.session_state["usage_log"])
+    with col1:
+        fav_csv = to_csv(sorted(st.session_state["favorites"]))
+        st.download_button(
+            label="Download Favorites CSV",
+            data=fav_csv,
+            file_name="favorites.csv",
+            mime="text/csv"
+       )
+
+    with col2:
+        fav_json = to_json(sorted(st.session_state["favorites"]))
+        st.download_button(
+            label="Download Favorites JSON",
+            data=fav_json,
+            file_name="favorites.json",
+            mime="application/json"
+        )
+
+    with col3:
+        fav_excel = to_excel(sorted(st.session_state["favorites"]))
+        st.download_button(
+            label="Download Favorites Excel",
+            data=fav_excel,
+            file_name="favorites.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
